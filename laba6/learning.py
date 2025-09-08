@@ -103,8 +103,8 @@ class CatDogClassifier:
         dog_dir = os.path.join(data_dir, 'dog')
         
         cat_count = len([f for f in os.listdir(cat_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]) if os.path.exists(cat_dir) else 0
-        dog_count = len([f for f in os.listlistdir(dog_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]) if os.path.exists(dog_dir) else 0
-        
+        dog_count = len([f for f in os.listdir(dog_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]) if os.path.exists(dog_dir) else 0
+
         print(f"🐱 Изображений кошек: {cat_count}")
         print(f"🐶 Изображений собак: {dog_count}")
         
