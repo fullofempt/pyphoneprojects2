@@ -1,12 +1,13 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from PIL import Image
+from PIL import Image, ImageTk
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
 import seaborn as sns
+import threading
 
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, load_model
@@ -102,7 +103,7 @@ class CatDogClassifier:
         dog_dir = os.path.join(data_dir, 'dog')
         
         cat_count = len([f for f in os.listdir(cat_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]) if os.path.exists(cat_dir) else 0
-        dog_count = len([f for f in os.listdir(dog_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]) if os.path.exists(dog_dir) else 0
+        dog_count = len([f for f in os.listlistdir(dog_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]) if os.path.exists(dog_dir) else 0
         
         print(f"🐱 Изображений кошек: {cat_count}")
         print(f"🐶 Изображений собак: {dog_count}")
@@ -336,8 +337,247 @@ class CatDogClassifier:
         plt.tight_layout()
         plt.show()
 
-# Класс GUI остается без изменений (как в предыдущем сообщении)
-# [Здесь должен быть полный код класса GUI]
+class GUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Cat vs Dog Classifier")
+        self.root.geometry("900x700")
+        
+        self.classifier = CatDogClassifier()
+        self.model_trained = False
+        
+        self.create_widgets()
+    
+    def create_widgets(self):
+        """Создание элементов интерфейса"""
+        # Notebook для вкладок
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        # Вкладка обучения
+        self.train_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.train_frame, text="Обучение")
+        
+        # Вкладка предсказания
+        self.predict_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.predict_frame, text="Предсказание")
+        
+        # Настройка вкладки обучения
+        self.setup_train_tab()
+        
+        # Настройка вкладки предсказания
+        self.setup_predict_tab()
+    
+    def setup_train_tab(self):
+        """Настройка вкладки обучения"""
+        # Выбор директории с данными
+        ttk.Label(self.train_frame, text="Директория с данными:").grid(row=0, column=0, padx=5, pady=5, sticky='w')
+        self.data_dir_var = tk.StringVar()
+        ttk.Entry(self.train_frame, textvariable=self.data_dir_var, width=50).grid(row=0, column=1, padx=5, pady=5)
+        ttk.Button(self.train_frame, text="Обзор", command=self.browse_data_dir).grid(row=0, column=2, padx=5, pady=5)
+        
+        # Параметры обучения
+        ttk.Label(self.train_frame, text="Количество эпох:").grid(row=1, column=0, padx=5, pady=5, sticky='w')
+        self.epochs_var = tk.IntVar(value=50)
+        ttk.Entry(self.train_frame, textvariable=self.epochs_var, width=10).grid(row=1, column=1, padx=5, pady=5, sticky='w')
+        
+        ttk.Label(self.train_frame, text="Размер батча:").grid(row=2, column=0, padx=5, pady=5, sticky='w')
+        self.batch_size_var = tk.IntVar(value=32)
+        ttk.Entry(self.train_frame, textvariable=self.batch_size_var, width=10).grid(row=2, column=1, padx=5, pady=5, sticky='w')
+        
+        # Информация о системе
+        ttk.Label(self.train_frame, text=f"Режим: {'GPU' if GPU_AVAILABLE else 'CPU'}").grid(row=3, column=0, columnspan=3, pady=5)
+        
+        # Кнопка обучения
+        self.train_btn = ttk.Button(self.train_frame, text="Начать обучение", command=self.start_training)
+        self.train_btn.grid(row=4, column=0, columnspan=3, pady=10)
+        
+        # Прогресс бар
+        self.progress = ttk.Progressbar(self.train_frame, mode='indeterminate')
+        self.progress.grid(row=5, column=0, columnspan=3, sticky='ew', padx=5, pady=5)
+        
+        # Текстовое поле для логов
+        self.log_text = tk.Text(self.train_frame, height=15, width=80)
+        scrollbar = ttk.Scrollbar(self.train_frame, orient='vertical', command=self.log_text.yview)
+        self.log_text.configure(yscrollcommand=scrollbar.set)
+        
+        self.log_text.grid(row=6, column=0, columnspan=2, padx=5, pady=5, sticky='nsew')
+        scrollbar.grid(row=6, column=2, padx=(0, 5), pady=5, sticky='ns')
+        
+        # Кнопка визуализации
+        self.viz_btn = ttk.Button(self.train_frame, text="Показать графики", command=self.show_graphs, state='disabled')
+        self.viz_btn.grid(row=7, column=0, pady=5, padx=5)
+        
+        # Кнопка сохранения модели
+        self.save_btn = ttk.Button(self.train_frame, text="Сохранить модель", command=self.save_model, state='disabled')
+        self.save_btn.grid(row=7, column=1, pady=5, padx=5)
+        
+        # Настройка веса строк и колонок
+        self.train_frame.grid_rowconfigure(6, weight=1)
+        self.train_frame.grid_columnconfigure(1, weight=1)
+    
+    def setup_predict_tab(self):
+        """Настройка вкладки предсказания"""
+        # Загрузка модели
+        ttk.Label(self.predict_frame, text="Загрузить модель:").grid(row=0, column=0, padx=5, pady=5, sticky='w')
+        self.model_path_var = tk.StringVar()
+        ttk.Entry(self.predict_frame, textvariable=self.model_path_var, width=50).grid(row=0, column=1, padx=5, pady=5)
+        ttk.Button(self.predict_frame, text="Обзор", command=self.browse_model).grid(row=0, column=2, padx=5, pady=5)
+        ttk.Button(self.predict_frame, text="Загрузить", command=self.load_model).grid(row=0, column=3, padx=5, pady=5)
+        
+        # Выбор изображения для предсказания
+        ttk.Label(self.predict_frame, text="Изображение для классификации:").grid(row=1, column=0, padx=5, pady=5, sticky='w')
+        self.image_path_var = tk.StringVar()
+        ttk.Entry(self.predict_frame, textvariable=self.image_path_var, width=50).grid(row=1, column=1, padx=5, pady=5)
+        ttk.Button(self.predict_frame, text="Обзор", command=self.browse_image).grid(row=1, column=2, padx=5, pady=5)
+        
+        # Кнопка предсказания
+        self.predict_btn = ttk.Button(self.predict_frame, text="Классифицировать", command=self.predict, state='disabled')
+        self.predict_btn.grid(row=2, column=0, columnspan=4, pady=10)
+        
+        # Область для отображения изображения
+        self.image_label = ttk.Label(self.predict_frame, text="Изображение появится здесь")
+        self.image_label.grid(row=3, column=0, columnspan=4, pady=10)
+        
+        # Результат предсказания
+        self.result_var = tk.StringVar(value="Результат: ")
+        ttk.Label(self.predict_frame, textvariable=self.result_var, font=('Arial', 14)).grid(row=4, column=0, columnspan=4, pady=10)
+        
+        # Настройка веса колонок
+        self.predict_frame.grid_columnconfigure(1, weight=1)
+    
+    def browse_data_dir(self):
+        """Выбор директории с данными"""
+        directory = filedialog.askdirectory()
+        if directory:
+            self.data_dir_var.set(directory)
+    
+    def browse_model(self):
+        """Выбор файла модели"""
+        filepath = filedialog.askopenfilename(filetypes=[("H5 files", "*.h5"), ("All files", "*.*")])
+        if filepath:
+            self.model_path_var.set(filepath)
+    
+    def browse_image(self):
+        """Выбор изображения"""
+        filepath = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp"), ("All files", "*.*")])
+        if filepath:
+            self.image_path_var.set(filepath)
+            self.display_image(filepath)
+    
+    def display_image(self, filepath):
+        """Отображение изображения"""
+        try:
+            img = Image.open(filepath)
+            img.thumbnail((300, 300))
+            photo = ImageTk.PhotoImage(img)
+            self.image_label.configure(image=photo)
+            self.image_label.image = photo  # Сохраняем ссылку
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось загрузить изображение: {e}")
+    
+    def log_message(self, message):
+        """Добавление сообщения в лог"""
+        self.log_text.insert(tk.END, message + "\n")
+        self.log_text.see(tk.END)
+        self.root.update()
+    
+    def start_training(self):
+        """Запуск обучения"""
+        data_dir = self.data_dir_var.get()
+        if not data_dir or not os.path.exists(data_dir):
+            messagebox.showerror("Ошибка", "Выберите корректную директорию с данными")
+            return
+        
+        # Проверка структуры директории
+        expected_dirs = ['cat', 'dog']
+        for dir_name in expected_dirs:
+            if not os.path.exists(os.path.join(data_dir, dir_name)):
+                messagebox.showerror("Ошибка", f"В директории должны быть подпапки 'cat' и 'dog'")
+                return
+        
+        # Запуск обучения в отдельном потоке
+        self.train_btn.config(state='disabled')
+        self.progress.start()
+        
+        def train_thread():
+            try:
+                self.log_message("🤖 Информация о системе:")
+                self.log_message(f"TensorFlow version: {tf.__version__}")
+                self.log_message(f"GPU доступно: {len(tf.config.list_physical_devices('GPU'))}")
+                self.log_message(f"Используется: {'GPU' if GPU_AVAILABLE else 'CPU'}")
+                self.log_message("=" * 50)
+                self.log_message("Начало обучения...")
+                
+                epochs = self.epochs_var.get()
+                batch_size = self.batch_size_var.get()
+                
+                self.classifier.train(data_dir, epochs=epochs, batch_size=batch_size)
+                
+                self.log_message("✅ Обучение завершено!")
+                if hasattr(self.classifier, 'history') and self.classifier.history:
+                    self.log_message(f"Финальная точность: {self.classifier.history.history['val_accuracy'][-1]:.4f}")
+                
+                # Активируем кнопки после обучения
+                self.viz_btn.config(state='normal')
+                self.save_btn.config(state='normal')
+                self.predict_btn.config(state='normal')
+                self.model_trained = True
+                
+            except Exception as e:
+                self.log_message(f"❌ Ошибка при обучении: {e}")
+            finally:
+                self.progress.stop()
+                self.train_btn.config(state='normal')
+        
+        # Запуск в отдельном потоке для избежания зависания GUI
+        thread = threading.Thread(target=train_thread)
+        thread.daemon = True
+        thread.start()
+    
+    def show_graphs(self):
+        """Показать графики обучения"""
+        if self.classifier.history:
+            self.classifier.plot_training_history()
+    
+    def save_model(self):
+        """Сохранение модели"""
+        filepath = filedialog.asksaveasfilename(defaultextension=".h5", filetypes=[("H5 files", "*.h5")])
+        if filepath:
+            try:
+                self.classifier.save_model(filepath)
+                messagebox.showinfo("Успех", f"Модель сохранена: {filepath}")
+            except Exception as e:
+                messagebox.showerror("Ошибка", f"Не удалось сохранить модель: {e}")
+    
+    def load_model(self):
+        """Загрузка модели"""
+        filepath = self.model_path_var.get()
+        if filepath and os.path.exists(filepath):
+            try:
+                self.classifier.load_model(filepath)
+                messagebox.showinfo("Успех", "Модель загружена")
+                self.predict_btn.config(state='normal')
+                self.model_trained = True
+            except Exception as e:
+                messagebox.showerror("Ошибка", f"Не удалось загрузить модель: {e}")
+    
+    def predict(self):
+        """Предсказание для изображения"""
+        if not self.model_trained:
+            messagebox.showerror("Ошибка", "Сначала обучите или загрузите модель")
+            return
+        
+        image_path = self.image_path_var.get()
+        if not image_path or not os.path.exists(image_path):
+            messagebox.showerror("Ошибка", "Выберите изображение для классификации")
+            return
+        
+        try:
+            class_name, confidence = self.classifier.predict_image(image_path)
+            self.result_var.set(f"Результат: {class_name} (уверенность: {confidence:.2%})")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка при предсказании: {e}")
 
 def main():
     """Основная функция"""
