@@ -181,7 +181,7 @@ class CatDogClassifier:
         callbacks = [
             EarlyStopping(patience=10, restore_best_weights=True, verbose=1),
             ReduceLROnPlateau(factor=0.5, patience=5, min_lr=1e-7, verbose=1),
-            ModelCheckpoint('best_model.h5', monitor='val_accuracy', save_best_only=True, mode='max', verbose=1)
+            ModelCheckpoint('best_model.keras', monitor='val_accuracy', save_best_only=True, mode='max', verbose=1)
         ]
         
         # Построение улучшенной модели
@@ -283,7 +283,7 @@ class CatDogClassifier:
     def save_model(self, filepath):
         """Сохранение модели"""
         if self.model:
-            self.model.save(filepath)
+            self.model.save(filepath if filepath.endswith('.keras') else filepath + '.keras')
     
     def load_model(self, filepath):
         """Загрузка модели"""
@@ -454,7 +454,8 @@ class GUI:
     
     def browse_model(self):
         """Выбор файла модели"""
-        filepath = filedialog.askopenfilename(filetypes=[("H5 files", "*.h5"), ("All files", "*.*")])
+        filepath = filedialog.askopenfilename(filetypes=[("H5 files", "*.h5"), ("Keras files", "*.keras"), ("All files", "*.*")])
+
         if filepath:
             self.model_path_var.set(filepath)
     
